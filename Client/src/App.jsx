@@ -1,40 +1,42 @@
-import { useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-
-import Home from "./pages/Home.jsx";
-import Login from "./pages/Login.jsx";
-import Header from "./components/Header.jsx";
-import Footer from "./components/Footer";
-import Register from "./pages/Register.jsx";
-import ContactUs from "./pages/ContactUs.jsx";
-import NotFound from "./pages/NotFound.jsx";
-import CustomerDashboard from "./pages/dashboard/CustomerDashboard";
-import RestaurantDashboard from "./pages/dashboard/RestaurantDashboard";
-import RiderDashboard from "./pages/dashboard/RiderDashboard";
-import AdminDashboard from "./pages/dashboard/AdminDashboard";
-
+import React from "react";
+import Register from "./pages/Register";
 import { Toaster } from "react-hot-toast";
-
-function App() {
+import { Routes, Route, Navigate } from "react-router-dom";
+import ForgotPassword from "./pages/ForgotPassword";
+import Login from "./pages/Login";
+import useGetCurrentUser from "./hooks/useGetCurrentUser";
+import { useSelector } from "react-redux";
+import Home from "./pages/Home";
+import useGetCity from "./hooks/useGetCity";
+const App = () => {
+  useGetCurrentUser();
+  useGetCity()
+  const{userData} =useSelector(state=>state.user)
+  console.log(userData)
   return (
     <>
-      <div>
-        <BrowserRouter>
-          <Toaster />
-          <Header />
-          <Routes>
-            <Route path={"/"} element={<Home />} />
-            <Route path={"/login"} element={<Login />} />
-            <Route path={"/register"} element={<Register />} />
-            <Route path={"/contactus"} element={<ContactUs />} />
+      <Toaster />
 
-            {/* Dashboard Routes */}
-            <Route path={"/user/dashboard"} element={<UserDashBoard />} />
-          </Routes>
-        </BrowserRouter>
-      </div>
+      <Routes>
+        <Route
+          path="/"
+          element={userData ? <Home /> : <Navigate to={"/login"} />}
+        />
+        <Route
+          path="/login"
+          element={!userData ? <Login /> : <Navigate to={"/"} />}
+        />
+        <Route
+          path="/register"
+          element={!userData ? <Register /> : <Navigate to={"/"} />}
+        />
+        <Route
+          path="/forgot-password"
+          element={!userData ? <ForgotPassword /> : <Navigate to={"/"} />}
+        />
+      </Routes>
     </>
   );
-}
+};
 
 export default App;

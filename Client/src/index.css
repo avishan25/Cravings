@@ -1,13 +1,17 @@
 @import "tailwindcss";
 
-button{
-    cursor: pointer;
+
+:root {
+ 
+  --primaryColor: #ff4d2d;
+
+  --hoverColor: #e64323;
+  --bgColor: #fff9f6;
+  --borderColor:#ddd
 }
-
-
-@theme{
-
-    --color-primary: #ED8A42;
-    --color-secondary: #b6c5ff;
-    --color-background: #f8e6e0;
+@theme {
+  --color-primaryColor: var(--primaryColor);
+  --color-hoverColor: var(--hoverColor);
+  --color-bgColor: var(--bgColor);
+  --color-borderColor: var(--borderColor);
 }

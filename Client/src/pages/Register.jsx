@@ -1,211 +1,211 @@
-
-import React from 'react'
-import api from "../config/api.config.js"
-import * as YUP from "yup";
+import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { useState } from "react";
+import { auth, googlep } from "../../firebase.js";
+import { FcGoogle } from "react-icons/fc";
+import { IoMdEye, IoMdEyeOff } from "react-icons/io";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useState } from 'react'
-import CravingsLogo from "../assets/CravingsLogo.png"
-
+import {RegsiterSchema,RegsiterWithGoogleSchema,} from "../validator/RegisterValidator.jsx";
+import Logo from "../assets/CravingsLogo.png";
+import axios from "axios";
+import { useDispatch } from "react-redux";
+import { setUserData } from "../redux/userSlice.js";
 const Register = () => {
-  
-    const[userData ,setUserData] = useState({
-        fullName:"",
-        email:"",
-        password:"",
-        dob:"",
-        gender:"",
-        phone:"",
+  const [role, setRole] = useState("user");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const navigate = useNavigate();
+  const dispatch =useDispatch();
+  // 2. Handle standard email/password registration
+  const handleRegister = async () => {};
 
-    })
+  const handleGoogleAuth = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
 
-    const[errors,setErrors] =useState({});
+      console.log("Google Sign-In Popup Successful!", result);
+      const googleEmail = result.user.email;
+      const googleName = result.user.displayName;
+      const googlePhone = result.user.phoneNumber || phone;
 
-    const updateUserDate =  (e)=>{
+      setEmail(googleEmail);
+      setFullName(googleName);
+      setPhone(googlePhone);
+      const payload = {
+        fullName: googleName,
+        email: googleEmail,
+        phone: googlePhone,
+        role,
+      };
 
-        const{name,value} =e.target;
-         setUserData((prev) => ({ ...prev, [name]: value }));
-       
+      console.log(payload, "Working here");
+      const response = RegsiterWithGoogleSchema.safeParse(payload);
+      console.log("Form Validation", response);
 
+      if (!response.success) {
+        const formattedErrors = response.error.flatten().fieldErrors;
 
+        const cleanErrors = Object.keys(formattedErrors).reduce((acc, key) => {
+          acc[key] = formattedErrors[key][0];
+          return acc;
+        }, {});
+        setFieldErrors(cleanErrors);
+
+        console.log(cleanErrors);
+        return;
+      }
+
+      setFieldErrors({});
+      const res = await axios.post(
+        "http://localhost:4500/api/auth/register/google-auth",
+        payload,
+        { withCredentials: true },
+      );
+     
+      dispatch(setUserData(result.data.data))
+      toast.success(res.data.message);
+
+      console.log(res);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Invalid Input");
+      console.log(err);
     }
+  };
 
-  const phoneRegExp = /^\d{10}$/;
+  // ...rest of your JSX unchanged, just wire the button to handleGoogleAuth
 
-    const passwordRegExp =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_+\-=\[\]\\\/~`])[A-Za-z\d!@#$%^&*(),.?":{}|<>_+\-=\[\]\\\/~`]{8,}$/;
+  return (
+    <>
+      <div className="bg-bgColor  backdrop-blur-3xl w-full flex items-center justify-center min-h-screen p-4">
+        <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8 border-[1px] border-borderColor flex flex-col gap-2">
+          {/* LOGO */}
+          <div className="flex items-center justify-center ">
+            <img src={Logo} className="h-20" alt="" />
+            <h1 className="font-bold text-primaryColor text-3xl text-center ">
+              2 YUM{" "}
+            </h1>
+          </div>
 
+          <div className="flex flex-col max-w-screen">
+            <label htmlFor="fullName">Full Name</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Enter Full Name"
+              className="bg-white w-full border rounded-lg focus:outline-none focus:border-primaryColor px-3 py-2 border-borderColor"
+            />
+            {fieldErrors.fullName && (
+              <span className="text-red-500 my-1 px-1">
+                {fieldErrors.fullName}
+              </span>
+            )}
+          </div>
 
-    const validationSchema = YUP.object({
-      fullName: YUP.string().required("* Name is required"),
-      email: YUP.string().required("* Email is required").email("Invalid Email Format"),
-      dob: YUP.date().typeError("* Dob is required").required("* Dob is required"),
-      gender: YUP.string().required("* Gender is required"),
-      phone: YUP.string()
-        .matches(phoneRegExp, "* Please enter a valid phone number format")
-        .required("* phone no is required"),
-      password: YUP.string().matches(passwordRegExp,"* Password mush contain a lowercase,uppercase,digit and one special character and mmin length 8").required("* password is required"),
-    });
+          <div className="flex flex-col max-w-screen">
+            <label htmlFor="email">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter Email Address"
+              className="bg-white w-full border rounded-lg focus:outline-none focus:border-primaryColor px-3 py-2 border-borderColor"
+            />
+            {fieldErrors.email && (
+              <span className="text-red-500 my-1 px-1">
+                {fieldErrors.email}
+              </span>
+            )}
+          </div>
 
+          <div className="flex flex-col max-w-screen">
+            <label htmlFor="phone">Phone</label>
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Enter Phone Number"
+              className="bg-white w-full border rounded-lg focus:outline-none focus:border-primaryColor px-3 py-2 border-borderColor"
+              required
+            />
+            {fieldErrors.phone && (
+              <span className="text-red-500 my-1 px-1">
+                {fieldErrors.phone}
+              </span>
+            )}
+          </div>
 
-    const Validate =async ()=>{
-       
-       try{
-        console.log(await validationSchema.isValid(userData));
-       
-        await validationSchema.validate(userData,{abortEarly:false})
-        setErrors({});
-        return true;
-       } 
-       catch(error){
+          <div className="flex flex-col max-w-screen ">
+            <label htmlFor="Password">Password</label>
 
-        const newErrors ={};
-        error.inner.forEach((err) =>{
-            newErrors[err.path]= err.message;
-        })
-
-        setErrors(newErrors)
-        return false;
-        
-       }
-
-    };
-
-    const handleSubmit =async (e)=>{
-
-        e.preventDefault();
-        
-       
-        const isValid =await Validate();
-        if(!isValid){
-          toast.error("Invalid user data");
-           return; 
-        }
-        
-
-        const payload ={
-          fullName:userData.fullName,
-          email:userData.email,
-          dob:userData.dob,
-          gender:userData.gender,
-          password:userData.password,
-          phone:userData.phone,
-        }
-        console.log(payload);
-
-        try{
-
-          const res =await api.post("auth/register",payload);
-          toast.success(res.data.message);
-        }
-        catch(error){
-          console.log(error);
-        }
-    }
-  
-  
-    return (
-      <>
-        <div className="flex flex-col items-center justify-center fixed inset-0 bg-black/30 backdrop-blur-sm p-5 w-screen h-auto">
-          <form
-            action=""
-            onSubmit={handleSubmit}
-            className="flex flex-col justify-center items-center [&_input,&_select]:rounded-[10px] [&_input,&_select]:pl-4 [&_input,&_select]:border-1 [&_input,&_select]:outline-0 [&_input,&_select]:border-[#dbdbdb]  [&_input,&_select]:p-3 [&_input]:h-12 [&_input,&_select]:w-80  [&_div]:flex [&>div]:flex-col gap-2 [&_.error]:text-red-500 bg-white rounded-xl px-8 py-4 shadow-xl"
-          >
-            <div className="text-center pr-8">
-              <img src={CravingsLogo} alt="" className="h-30" />
-            </div>
-            <div>
-              <label htmlFor="fullName">Full Name</label>
+            <div className="relative">
               <input
-                id="fullName"
-                type="text"
-                name="fullName"
-                placeholder="Enter your First Name"
-                value={userData.fullName}
-                onChange={updateUserDate}
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter Password"
+                className="bg-white w-full border rounded-lg focus:outline-none focus:border-primaryColor px-3 py-2 border-borderColor"
               />
-              {errors.fullName && (
-                <div className="error">{errors.fullName}</div>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="email">Email</label>
-              <input
-                id="email"
-                type="email"
-                name="email"
-                value={userData.email}
-                placeholder="Enter your Email"
-                onChange={updateUserDate}
-              />
-              {errors.email && <div className="error">{errors.email}</div>}
-            </div>
-
-            <div>
-              <label htmlFor="dob">Date Of Birth</label>
-              <input
-                id="dob"
-                type="date"
-                name="dob"
-                value={userData.dob}
-                onChange={updateUserDate}
-              />
-              {errors.dob && <div className="error">{errors.dob} </div>}
-            </div>
-
-            <div>
-              <label htmlFor="phone">Phone Number</label>
-              <input
-                id="phone"
-                type="text"
-                name="phone"
-                value={userData.phone}
-                placeholder="Enter your Phone No.."
-                onChange={updateUserDate}
-              />
-              {errors.phone && <div className="error">{errors.phone} </div>}
-            </div>
-
-            <div>
-              <label htmlFor="gender">Gender</label>
-              <select
-                name="gender"
-                id="gender"
-                onChange={updateUserDate}
-                value={userData.gender}
+              <span
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-3 cursor-pointer"
               >
-                <option value="">Gender</option>
-                <option value="Male">Male</option>
-
-                <option value="Female">Female</option>
-
-                <option value="Other">Other</option>
-              </select>
-              {errors.gender && <div className="error">{errors.gender} </div>}
+                {showPassword ? <IoMdEyeOff /> : <IoMdEye />}
+              </span>
             </div>
+            {fieldErrors.password && (
+              <span className="text-red-500 my-1 px-1">
+                {fieldErrors.password}
+              </span>
+            )}
+          </div>
 
-            <div className="w-80">
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="text"
-                name="password"
-                value={userData.password}
-                onChange={updateUserDate}
-              />
-              {errors.password && (
-                <div className="error">{errors.password} </div>
-              )}
-            </div>
+          <div className="flex gap-3 cursor-pointer">
+            {["user", "restaurant", "rider"].map((ele) => {
+              return (
+                <span
+                  key={ele}
+                  className={`border  border-borderColor py-1 rounded-lg px-2 ${role === ele ? "bg-primaryColor text-white" : "bg-white"} transition-colors`}
+                  onClick={() => setRole(ele)}
+                >
+                  {ele}
+                </span>
+              );
+            })}
+          </div>
+          <button
+            className="bg-primaryColor px-3 py-2 text-white  w-full border rounded-lg focus:outline-none cursor-pointer hover:bg-hoverColor"
+            onClick={handleRegister}
+          >
+            Register
+          </button>
 
-            <button className="bg-[#EB622C] py-2 px-20 rounded-[12px] text-white text-xl outline-0  w-80">
-              Sign Up
-            </button>
-          </form>
+          <div
+            className="flex items-center justify-center border border-borderColor w-full gap-2 my-2 py-1 rounded-lg cursor-pointer hover:bg-gray-300"
+            onClick={() => handleGoogleAuth()}
+          >
+            <FcGoogle size={30} />
+            Sign Up with Google
+          </div>
+          <div onClick={() => navigate("/login")} className="text-center">
+            Already Have an account?{" "}
+            <span className="text-primaryColor cursor-pointer">Log In</span>
+          </div>
         </div>
-      </>
-    );
-}
+      </div>
+    </>
+  );
+};
 
-export default Register
+{
+  /* ; 
+   
+
+*/
+}
+export default Register;

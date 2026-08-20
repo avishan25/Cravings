@@ -1,158 +1,254 @@
 import User from "../models/user.model.js";
-import bcrypt from "bcrypt"
- import otpGenerator from "otp-generator";;
+import genToken from "../utils/token.js";
+import {
+  loginSchema,
+  registerSchema,
+  googleRegisterSchema,
+} from "../validators/authValidator.js";
+import bcrypt from "bcrypt";
+import sendOTPMail from "../utils/mail.js";
 
-import { genToken } from "../utils/auth.service.js";
-
-export const RegisterUser = async (req, res, next) => {
+export const register = async (req, res) => {
   try {
-    const { fullName, email, phone, password, gender, dob } = req.body;
+    const result = registerSchema.safeParse(req.body);
 
-    //check for empty input
-    if (!fullName || !email || !phone || !password || !gender || !dob) {
-      const error = new Error("All Fields Required");
-      error.statusCode = 400;
-      return next(error);
+    if (!result.success) {
+      return res.status(400).json({ message: "Validation failed" });
     }
 
-    //check existing user
+    const { fullName, email, phone, password } = result.data;
 
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      const error = new Error("Email already Registered");
-      error.statusCode = 409;
-      return next(error);
+      return res.status(409).json({ message: "User Already Exists" });
     }
 
-    const photoURL = `https://placehold.co/600x400?text=${fullName.charAt(0).toUpperCase()}`;
-    const purl = new String(photoURL);
-    const photo = {
-      url: purl,
-      publicId: null,
-    };
+    const hashedpswd = await bcrypt.hash(password, 10);
 
-    const SALT = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, SALT);
-
-    const newuser = await User.create({
+    let user = {
       fullName,
       email,
       phone,
-      password: hashedPassword,
-      gender,
-      dob,
-      photo: photo,
+      password: hashedpswd,
+    };
+
+    user = await User.create(user);
+
+    const token = genToken(user._id);
+
+    res.cookie("token", token, {
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
     });
 
-    res.status(201).json({ message: "User Registered Successfully" });
+    const data = {
+      fullName,
+      email,
+      phone,
+    };
+    res
+      .status(201)
+      .json({ message: "User Registered Successfully !", data: data });
+  } catch (error) {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
-    //Create New User nad Complete Registration
+export const login = async (req, res) => {
+  try {
+    const result = loginSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ message: "Invalid Input Data" });
+    }
+    const { email, password } = result.data;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ message: "User Does not Exists" });
+    }
+
+    const isValidPswd = await bcrypt.compare(password, user.password);
+
+    if (!isValidPswd) {
+      return res.status(401).json({ message: "Incorrect Password" });
+    }
+
+    const token = genToken(user._id);
+
+    res.cookie("token", token, {
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
+    });
+    res.status(200).json({ message: "User Logged in Successfully!" });
   } catch (error) {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-export const LoginUser = async (req, res, next) => {
+export const logout = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    res.clearCookie("token");
 
-    if (!email || !password) {
-      const error = new Error("All Fields Required");
+    res.status(200).json({ message: "User logged out successfully!" });
+  } catch (error) {
+    return res.status(500).json({message:"Internal Server Error"})
+  }
+};
 
-      error.statusCode = 400;
-      return next(error);
+export const googleRegister = async (req, res) => {
+  try {
+    const result = googleRegisterSchema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({ message: "Invalid Input data" });
     }
+    const { fullName, email, phone, password, role } = req.body;
 
     const existingUser = await User.findOne({ email });
-
-    if (!existingUser) {
-      const error = new Error("Email not Registered");
-      error.statusCode = 404;
-      return next(error);
+    if (existingUser) {
+      return res.status(409).json({ message: "Email already registered" });
     }
 
-    const isVerified = await bcrypt.compare(password, existingUser.password);
-
-    if (!isVerified) {
-      const error = new Error("Incorrect Passsword");
-      error.statusCode = 401;
-
-      return next(error);
-    }
-
-    const payload = {
-      id: existingUser._id,
+    let user = {
+      fullName,
+      email,
+      phone,
+      role,
     };
-    await genToken(payload, res);
+    user = await User.create(user);
+    const token = genToken(user._id);
 
-    res.status(200).json({
-      message: "Welcome back !!!",
-      data: existingUser,
+    res.cookie("token", token, {
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
     });
+
+    return res
+      .status(200)
+      .json({ message: "Registration Successfull!", data: user });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ message: "Internal Server Error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-export const LogoutUser = (req, res) => {
-  res.json({ messgae: "Error" });
-};
-
-//logging for error debugging
-
-export const SendOtp = async (req, res, next) => {
+export const googleLogin = async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      const error = new Error("Email is required");
-      error.statusCode = 400;
-      return next(error);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User does not exist" });
     }
 
-    const existingUser = await User.findOne({ email });
-    if (!existingUser) {
-      const error = new Error("Email not registered");
-      error.statusCode = 404;
-      return next(error);
-    }
+    const token = genToken(user._id);
 
-    // Generate and send OTP here
-   
-    
-    const newOTP = otpGenerator.generate(6, {
-      upperCaseAlphabets: false,
-      lowerCaseAlphabets: false,
-      specialChars: false,
+    res.cookie("token", token, {
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
     });
-    //Send OTP via Email
-    const hashedOTP = await bcrypt.hash(newOTP, 10);
-    const saveOTP = await OTP.create({
+
+    const result = {
       email,
-      otp: hashedOTP,
-    });
+      fullName: user.fullName,
+    };
 
+    return res.status(200).json({ message: "Login Successfull!", data: user });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const sendOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "Email not registered" });
+    }
+
+    const OTP = Math.floor(100000 + Math.random() * 900000).toString();
+
+    await sendOTPMail(email, OTP);
+
+    user.resetOTP = await bcrypt.hash(OTP, 10);
+    user.OTPexpire = new Date(Date.now() + 5 * 60 * 1000);
+    await user.save();
+    res.status(200).json({ message: "OTP sent successfully !" });
+  } catch (error) {
+    console.log(error)
+    return res.status(500).json({ message: "Internal Server Error" });
+
+  }
+};
+
+export const verifyOTP = async (req, res) => {
+  try {
+    const { email, OTP } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "Email not registered" });
+    }
+
+    if (!user.resetOTP || !user.OTPexpire || user.OTPexpire < Date.now()) {
+      return res.status(400).json({ message: "OTP Expired" });
+    }
+
+    const isVerified = await bcrypt.compare(String(OTP), user.resetOTP);
+
+    if (!isVerified) {
+      return res.status(401).json({ message: "Invalid OTP" });
+    }
     
-    await sendOTPEmail(email, newOTP);
+   
+    user.isOTPVerified = true;
+    await user.save();
 
-    res.status(200).json({ message: `OTP sent on '${email}'` });
+    return res.status(200).json({ message: "OTP Verified Successfully" });
   } catch (error) {
-    console.log(error.message);
-    next();
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
-export const VerifyOtp = async (req, res, next) => {
+
+export const resetPassword = async (req, res) => {
   try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: "Invalid Input" });
+    }
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "Email not registered" });
+    }
+    if (!user.OTPexpire || user.OTPexpire < Date.now() || !user.isOTPVerified) {
+      return res.status(401).json({ message: "OTP is not verified" });
+    }
+    user.resetOTP="";
+    user.OTPexpire=""
+    user.isOTPVerified=false
+    const hashedPswd = await bcrypt.hash(password, 10);
+    user.password = hashedPswd;
+    await user.save();
+    user.isOTPVerified = false;
+    await user.save();
+
+    return res.status(200).json({ message: "Password reset successfully" });
   } catch (error) {
-    console.log(error.message);
-    next();
-  }
-};
-export const ResetPassword = async (req, res, next) => {
-  try {
-  } catch (error) {
-    console.log(error.message);
-    next();
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
